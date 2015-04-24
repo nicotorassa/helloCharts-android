@@ -1,5 +1,7 @@
 package lecho.lib.hellocharts.renderer;
 
+import java.util.List;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -66,7 +68,7 @@ public class LineChartRenderer extends AbstractChartRenderer {
 		linePaint.setStrokeCap(Cap.ROUND);
 		linePaint.setStrokeWidth(ChartUtils.dp2px(density,
 				DEFAULT_LINE_STROKE_WIDTH_DP));
-		
+
 		pointPaint.setAntiAlias(true);
 		pointPaint.setStyle(Paint.Style.FILL);
 
@@ -269,7 +271,7 @@ public class LineChartRenderer extends AbstractChartRenderer {
 		}
 
 		canvas.drawPath(path, linePaint);
-//1
+		// 1
 		if (line.isFilled()) {
 			drawArea(canvas, line);
 		}
@@ -362,7 +364,7 @@ public class LineChartRenderer extends AbstractChartRenderer {
 			currentPointX = nextPointX;
 			currentPointY = nextPointY;
 		}
-//nunca
+		// nunca
 		canvas.drawPath(path, linePaint);
 		if (line.isFilled()) {
 			drawArea(canvas, line);
@@ -375,7 +377,7 @@ public class LineChartRenderer extends AbstractChartRenderer {
 				line.getStrokeWidth()));
 		linePaint.setColor(line.getColor());
 		linePaint.setPathEffect(line.getPathEffect());
-		
+
 		if (botColor != 0 && topColor != 0) {
 			linePaint.setShader(new LinearGradient(0, 0, 0, computator
 					.getChartHeight(), topColor, botColor,
@@ -387,33 +389,95 @@ public class LineChartRenderer extends AbstractChartRenderer {
 	// may cause problems in the future with
 	// implementing point styles.
 	private void drawPoints(Canvas canvas, Line line, int lineIndex, int mode) {
-		pointPaint.setColor(line.getColor());
-		int valueIndex = 0;
-		for (PointValue pointValue : line.getValues()) {
-			int pointRadius = ChartUtils.dp2px(density, line.getPointRadius());
-			final float rawX = computator.computeRawX(pointValue.getX());
-			final float rawY = computator.computeRawY(pointValue.getY());
-			if (computator.isWithinContentRect(rawX, rawY, checkPrecision)) {
-				// Draw points only if they are within
-				// contentRectMinusAllMargins, using contentRectMinusAllMargins
-				// instead of viewport to avoid some
-				// float rounding problems.
-				if (MODE_DRAW == mode) {
-					drawPoint(canvas, line, pointValue, rawX, rawY, pointRadius);
-					if (line.hasLabels()) {
-						drawLabel(canvas, line, pointValue, rawX, rawY,
-								pointRadius + labelOffset);
-					}
-				} else if (MODE_HIGHLIGHT == mode) {
-					highlightPoint(canvas, line, pointValue, rawX, rawY,
-							lineIndex, valueIndex);
-				} else {
-					throw new IllegalStateException(
-							"Cannot process points in mode: " + mode);
+
+		if (line.onlyMaxMinPoints()) {
+			int maxIndex = 0;
+			int minIndex = 0;
+			PointValue pointValueAux;
+			List<PointValue> values = line.getValues();
+			for (int i = 1; i < line.getValues().size(); i++) {
+				pointValueAux = values.get(i);
+				if (pointValueAux.getY() > values.get(maxIndex).getY()) {
+					maxIndex = i;
+				} else if (pointValueAux.getY() < values.get(minIndex).getY()) {
+					minIndex = i;
 				}
 			}
-			++valueIndex;
+
+			int valueIndex = 0;
+			for (PointValue pointValue : line.getValues()) {
+				int pointRadius = ChartUtils.dp2px(density,
+						line.getPointRadius());
+				final float rawX = computator.computeRawX(pointValue.getX());
+				final float rawY = computator.computeRawY(pointValue.getY());
+				if (computator.isWithinContentRect(rawX, rawY, checkPrecision)) {
+					// Draw points only if they are within
+					// contentRectMinusAllMargins, using
+					// contentRectMinusAllMargins
+					// instead of viewport to avoid some
+					// float rounding problems.
+					boolean draw = false;
+					if (valueIndex == maxIndex) {
+						pointPaint.setColor(Color.RED);
+						draw = true;
+					} else if (valueIndex == minIndex) {
+						pointPaint.setColor(Color.CYAN);
+						draw = true;
+					}
+					if (draw) {
+						if (MODE_DRAW == mode) {
+							drawPoint(canvas, line, pointValue, rawX, rawY,
+									pointRadius);
+							if (line.hasLabels()) {
+								drawLabel(canvas, line, pointValue, rawX, rawY,
+										pointRadius + labelOffset);
+							}
+						} else if (MODE_HIGHLIGHT == mode) {
+							highlightPoint(canvas, line, pointValue, rawX,
+									rawY, lineIndex, valueIndex);
+						} else {
+							throw new IllegalStateException(
+									"Cannot process points in mode: " + mode);
+						}
+					}
+
+				}
+
+				++valueIndex;
+			}
+		} else {
+			pointPaint.setColor(line.getColor());
+			int valueIndex = 0;
+			for (PointValue pointValue : line.getValues()) {
+				int pointRadius = ChartUtils.dp2px(density,
+						line.getPointRadius());
+				final float rawX = computator.computeRawX(pointValue.getX());
+				final float rawY = computator.computeRawY(pointValue.getY());
+				if (computator.isWithinContentRect(rawX, rawY, checkPrecision)) {
+					// Draw points only if they are within
+					// contentRectMinusAllMargins, using
+					// contentRectMinusAllMargins
+					// instead of viewport to avoid some
+					// float rounding problems.
+					if (MODE_DRAW == mode) {
+						drawPoint(canvas, line, pointValue, rawX, rawY,
+								pointRadius);
+						if (line.hasLabels()) {
+							drawLabel(canvas, line, pointValue, rawX, rawY,
+									pointRadius + labelOffset);
+						}
+					} else if (MODE_HIGHLIGHT == mode) {
+						highlightPoint(canvas, line, pointValue, rawX, rawY,
+								lineIndex, valueIndex);
+					} else {
+						throw new IllegalStateException(
+								"Cannot process points in mode: " + mode);
+					}
+				}
+				++valueIndex;
+			}
 		}
+
 	}
 
 	private void drawPoint(Canvas canvas, Line line, PointValue pointValue,
@@ -527,7 +591,6 @@ public class LineChartRenderer extends AbstractChartRenderer {
 		path.lineTo(right, baseRawValue);
 		path.lineTo(left, baseRawValue);
 		path.close();
-
 
 		linePaint.setStyle(Paint.Style.FILL);
 		linePaint.setAlpha(line.getAreaTransparency());
